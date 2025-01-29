@@ -67,10 +67,11 @@ export async function exportPage(data: IExportPageParams): Promise<void> {
   saveAs(req.data, decodeURIComponent(fileName));
 }
 
-export async function importPage(file: File, spaceId: string) {
+export async function importPage(file: File, spaceId: string, title?: string) {
   const formData = new FormData();
   formData.append("spaceId", spaceId);
   formData.append("file", file);
+  formData.append("title", title || file.name.replace('.md', ''));
 
   const req = await api.post<IPage>("/pages/import", formData, {
     headers: {

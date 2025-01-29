@@ -11,6 +11,19 @@ import { ISpace } from '@/features/space/types/space.types';
 import { useNavigate } from 'react-router-dom';
 import { buildPageUrl } from '@/features/page/page.utils';
 
+// List of emojis suitable for documentation/knowledge base
+const DOCUMENT_EMOJIS = [
+  "📄", "📝", "📚", "📖", "📗", "📘", "📙", "📔", "📒", "📕",
+  "🗂️", "📁", "📂", "🗄️", "📋", "📌", "📎", "🔖", "📑", "🏷️",
+  "✏️", "✍️", "🖋️", "📰", "🗞️", "📓", "💭", "💡", "🎯", "🔍",
+  "🌟", "⭐", "🌈", "🎨", "🎬", "🎮", "🎲", "🧩", "🔧", "⚙️"
+];
+
+const getRandomEmoji = () => {
+  const randomIndex = Math.floor(Math.random() * DOCUMENT_EMOJIS.length);
+  return DOCUMENT_EMOJIS[randomIndex];
+};
+
 interface SyncConfigFormProps {
   initialValues?: Partial<ISyncConfig>;
   onSuccess?: () => void;
@@ -202,12 +215,17 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
             type: 'text/markdown',
           });
 
-          const importedPage = await importPage(fileObj, values.targetConfig.spaceId);
+          // Add random emoji to the page name
+          const emoji = getRandomEmoji();
+          const fileName = file.name.replace('.md', '');
+          const pageTitle = `${emoji} ${fileName}`;
+          
+          const importedPage = await importPage(fileObj, values.targetConfig.spaceId, pageTitle);
           lastImportedPage = importedPage;
           
           notifications.show({
             title: 'Success',
-            message: `Imported ${file.name}`,
+            message: `Imported ${pageTitle}`,
             color: 'green',
           });
         } catch (error) {
