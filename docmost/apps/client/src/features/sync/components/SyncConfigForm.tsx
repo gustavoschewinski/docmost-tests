@@ -5,7 +5,7 @@ import { notifications } from '@mantine/notifications';
 import { createSyncConfig, updateSyncConfig } from '../services/sync-service';
 import { ISyncConfig } from '../types/sync.types';
 import { Octokit } from '@octokit/rest';
-import { importPage } from '@/features/page/services/page-service';
+import { importPage, deletePage, getRecentChanges } from '@/features/page/services/page-service';
 import { getSpaces } from '@/features/space/services/space-service';
 import { ISpace } from '@/features/space/types/space.types';
 
@@ -35,7 +35,8 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
         path: ''
       },
       targetConfig: {
-        updateExisting: true
+        updateExisting: true,
+        spaceId: ''
       },
       credentials: {
         accessToken: import.meta.env.VITE_GITHUB_ACCESS_TOKEN
@@ -67,6 +68,40 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
 
     fetchSpaces();
   }, []);
+
+  // Add effect to check for stale pages and auto-sync
+  useEffect(() => {
+    const checkAndAutoSync = async () => {
+      const spaceId = form.values.targetConfig?.spaceId;
+      if (!spaceId) return;
+
+      try {
+        const recentChanges = await getRecentChanges(spaceId);
+        if (!recentChanges?.items?.length) return;
+
+        const lastUpdate = new Date(recentChanges.items[0].updatedAt);
+        console.log("lastUpdate", lastUpdate);
+        const oneDayAgo = new Date();
+        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+        console.log("oneDayAgo", oneDayAgo);
+
+        if (lastUpdate < oneDayAgo) {
+          notifications.show({
+            title: 'Auto-sync triggered',
+            message: 'Pages have not been updated in over a day. Starting sync...',
+            color: 'blue',
+          });
+          await testConnection();
+        }
+      } catch (error) {
+        console.error('Failed to check recent changes:', error);
+      }
+    };
+
+    if (form.values.enabled) {
+      checkAndAutoSync();
+    }
+  }, [form.values.targetConfig?.spaceId, form.values.enabled]);
 
   const onFinish = async (values: Partial<ISyncConfig>) => {
     try {
@@ -126,6 +161,29 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
         color: 'blue',
       });
 
+      // Get list of existing pages to delete
+      const recentChanges = await getRecentChanges(values.targetConfig.spaceId);
+      const existingPages = recentChanges?.items || [];
+
+      // Delete existing pages first
+      for (const page of existingPages) {
+        try {
+          await deletePage(page.id);
+          notifications.show({
+            title: 'Cleanup',
+            message: `Deleted existing page: ${page.title}`,
+            color: 'yellow',
+          });
+        } catch (error) {
+          notifications.show({
+            title: 'Warning',
+            message: `Failed to delete page ${page.title}: ${error.message}`,
+            color: 'orange',
+          });
+        }
+      }
+
+      // Import new files
       for (const file of markdownFiles) {
         try {
           const blob = await octokit.git.getBlob({
@@ -171,7 +229,7 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
 
   return (
     <form onSubmit={form.onSubmit(onFinish)}>
-      <Stack spacing="sm" pt="sm">
+      <Stack gap="sm">
         <TextInput
           label="Configuration Name"
           placeholder="My GitHub Sync"
@@ -182,7 +240,7 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
           label="Schedule (Cron Expression)"
           placeholder="0 0 * * 0"
           {...form.getInputProps('schedule')}
-          tooltip="e.g., '0 0 * * 0' for weekly on Sunday at midnight"
+          description="e.g., '0 0 * * 0' for weekly on Sunday at midnight"
         />
 
         <TextInput
@@ -218,7 +276,7 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
             value: space.id,
             label: space.name
           }))}
-          loading={loading}
+          disabled={loading}
           {...form.getInputProps('targetConfig.spaceId')}
         />
 
@@ -240,10 +298,6 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
         >
           Deploy Connection
         </Button>
-
-        {/* <Button type="submit">
-          {isEdit ? 'Update' : 'Create'} Sync Configuration
-        </Button> */}
       </Stack>
     </form>
   );
