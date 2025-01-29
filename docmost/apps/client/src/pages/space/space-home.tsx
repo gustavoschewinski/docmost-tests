@@ -22,12 +22,10 @@ export default function SpaceHome() {
                 if (!recentChanges?.items?.length) return;
 
                 const lastUpdate = new Date(recentChanges.items[0].updatedAt);
-                const twoMinutesAgo = new Date();
-                twoMinutesAgo.setMinutes(twoMinutesAgo.getMinutes() - 2);
+                const oneDayAgo = new Date();
+                oneDayAgo.setDate(oneDayAgo.getDate() - 1);
 
-                console.log("lastUpdate", lastUpdate);
-                console.log("twoMinutesAgo", twoMinutesAgo);
-                if (lastUpdate < twoMinutesAgo) {
+                if (lastUpdate < oneDayAgo) {
                     console.log("Auto-sync triggered");
                     notifications.show({
                         title: 'Auto-sync triggered',
