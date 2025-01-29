@@ -36,7 +36,7 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
         updateExisting: true
       },
       credentials: {
-        accessToken: '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'
+        accessToken: ''
       }
     },
   });
