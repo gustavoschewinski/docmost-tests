@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { TextInput, Select, Switch, Button, Stack, Box } from '@mantine/core';
+import { TextInput, Select, Switch, Button, Stack, Box, Text } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { createSyncConfig, updateSyncConfig } from '../services/sync-service';
@@ -8,6 +8,8 @@ import { Octokit } from '@octokit/rest';
 import { importPage, deletePage, getRecentChanges } from '@/features/page/services/page-service';
 import { getSpaces } from '@/features/space/services/space-service';
 import { ISpace } from '@/features/space/types/space.types';
+import { useNavigate } from 'react-router-dom';
+import { buildPageUrl } from '@/features/page/page.utils';
 
 interface SyncConfigFormProps {
   initialValues?: Partial<ISyncConfig>;
@@ -20,6 +22,7 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
 }) => {
   const [spaces, setSpaces] = useState<ISpace[]>([]);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
   
   console.log(import.meta.env.VITE_GITHUB_ACCESS_TOKEN);
 
@@ -183,6 +186,8 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
         }
       }
 
+      let lastImportedPage = null;
+
       // Import new files
       for (const file of markdownFiles) {
         try {
@@ -197,7 +202,8 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
             type: 'text/markdown',
           });
 
-          await importPage(fileObj, values.targetConfig.spaceId);
+          const importedPage = await importPage(fileObj, values.targetConfig.spaceId);
+          lastImportedPage = importedPage;
           
           notifications.show({
             title: 'Success',
@@ -218,6 +224,16 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
         message: `Import process completed`,
         color: 'green',
       });
+
+      // Navigate to the last imported page
+      if (lastImportedPage) {
+        const space = spaces.find(s => s.id === values.targetConfig.spaceId);
+        if (space) {
+          const pageUrl = buildPageUrl(space.slug, lastImportedPage.slugId, lastImportedPage.title);
+          navigate(pageUrl);
+        }
+      }
+
     } catch (error) {
       notifications.show({
         title: 'Error',
@@ -229,18 +245,16 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
 
   return (
     <form onSubmit={form.onSubmit(onFinish)}>
-      <Stack gap="sm">
+      <Stack gap="sm" style={{paddingTop: '20px'}}>
+        
+        <Text size="md" fw={500} style={{paddingBottom: '10px'}}>
+          Synchronization settings
+        </Text>
+
         <TextInput
           label="Configuration Name"
           placeholder="My GitHub Sync"
           {...form.getInputProps('name')}
-        />
-
-        <TextInput
-          label="Schedule (Cron Expression)"
-          placeholder="0 0 * * 0"
-          {...form.getInputProps('schedule')}
-          description="e.g., '0 0 * * 0' for weekly on Sunday at midnight"
         />
 
         <TextInput
@@ -257,7 +271,7 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
 
         <TextInput
           label="Path"
-          placeholder="docs/"
+          placeholder=""
           {...form.getInputProps('sourceConfig.path')}
         />
 
@@ -278,16 +292,6 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
           }))}
           disabled={loading}
           {...form.getInputProps('targetConfig.spaceId')}
-        />
-
-        <Switch
-          label="Update existing pages"
-          {...form.getInputProps('targetConfig.updateExisting')}
-        />
-
-        <Switch
-          label="Enable sync"
-          {...form.getInputProps('enabled')}
         />
 
         <Button 

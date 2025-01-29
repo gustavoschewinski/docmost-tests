@@ -49,7 +49,7 @@ export default function SpaceSettingsModal({
             <Modal.CloseButton/>
           </Modal.Header>
           <Modal.Body>
-            <div style={{height: rem(700)}}>
+            <div style={{height: rem(600)}}>
               <Tabs defaultValue="members">
                 <Tabs.List>
                   <Tabs.Tab fw={500} value="general">
