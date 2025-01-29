@@ -29,6 +29,126 @@ interface SyncConfigFormProps {
   onSuccess?: () => void;
 }
 
+// Extract testConnection as a standalone function
+export const runSync = async (values: Partial<ISyncConfig>, spaces: ISpace[], navigate?: (path: string) => void) => {
+  if (!values.sourceConfig?.repository || !values.credentials?.accessToken || !values.targetConfig?.spaceId) {
+    notifications.show({
+      title: 'Error',
+      message: 'Please fill in repository, access token, and target space',
+      color: 'red',
+    });
+    return;
+  }
+
+  try {
+    const octokit = new Octokit({
+      auth: values.credentials.accessToken,
+    });
+
+    const [owner, repo] = values.sourceConfig.repository.split('/');
+    const path = values.sourceConfig.path || '';
+    const branch = values.sourceConfig.branch || 'main';
+
+    const response = await octokit.repos.getContent({
+      owner,
+      repo,
+      path,
+      ref: branch,
+    });
+
+    const contents = Array.isArray(response.data) ? response.data : [response.data];
+    const markdownFiles = contents.filter(item => item.type === 'file' && item.name.endsWith('.md'));
+    
+    notifications.show({
+      title: 'Found files',
+      message: `Found ${markdownFiles.length} markdown files. Starting import...`,
+      color: 'blue',
+    });
+
+    // Get list of existing pages to delete
+    const recentChanges = await getRecentChanges(values.targetConfig.spaceId);
+    const existingPages = recentChanges?.items || [];
+
+    // Delete existing pages first
+    for (const page of existingPages) {
+      try {
+        await deletePage(page.id);
+        notifications.show({
+          title: 'Cleanup',
+          message: `Deleted existing page: ${page.title}`,
+          color: 'yellow',
+        });
+      } catch (error) {
+        notifications.show({
+          title: 'Warning',
+          message: `Failed to delete page ${page.title}: ${error.message}`,
+          color: 'orange',
+        });
+      }
+    }
+
+    let lastImportedPage = null;
+
+    // Import new files
+    for (const file of markdownFiles) {
+      try {
+        const blob = await octokit.git.getBlob({
+          owner,
+          repo,
+          file_sha: file.sha,
+        });
+
+        const content = atob(blob.data.content);
+        const fileObj = new File([new TextEncoder().encode(content)], file.name, {
+          type: 'text/markdown',
+        });
+
+        // Add random emoji to the page name
+        const emoji = getRandomEmoji();
+        const fileName = file.name.replace('.md', '');
+        const pageTitle = `${emoji} ${fileName}`;
+        
+        const importedPage = await importPage(fileObj, values.targetConfig.spaceId, pageTitle);
+        lastImportedPage = importedPage;
+        
+        notifications.show({
+          title: 'Success',
+          message: `Imported ${pageTitle}`,
+          color: 'green',
+        });
+      } catch (error) {
+        notifications.show({
+          title: 'Error',
+          message: `Failed to import ${file.name}: ${error.message}`,
+          color: 'red',
+        });
+      }
+    }
+
+    notifications.show({
+      title: 'Complete',
+      message: `Import process completed`,
+      color: 'green',
+    });
+
+    // Navigate to the last imported page
+    if (lastImportedPage && navigate) {
+      const space = spaces.find(s => s.id === values.targetConfig.spaceId);
+      if (space) {
+        const pageUrl = buildPageUrl(space.slug, lastImportedPage.slugId, lastImportedPage.title);
+        navigate(pageUrl);
+      }
+    }
+
+  } catch (error) {
+    notifications.show({
+      title: 'Error',
+      message: error.message || 'Failed to connect to GitHub',
+      color: 'red',
+    });
+  }
+};
+
 export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
   initialValues,
   onSuccess,
@@ -48,7 +168,7 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
       sourceConfig: {
         repository: 'digilabmuc/digilabmuc',
         branch: 'main',
-        path: ''
+        path: '/readmes'
       },
       targetConfig: {
         updateExisting: true,
@@ -142,123 +262,7 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
   };
 
   const testConnection = async () => {
-    const values = form.values;
-    if (!values.sourceConfig?.repository || !values.credentials?.accessToken || !values.targetConfig?.spaceId) {
-      notifications.show({
-        title: 'Error',
-        message: 'Please fill in repository, access token, and target space',
-        color: 'red',
-      });
-      return;
-    }
-
-    try {
-      const octokit = new Octokit({
-        auth: values.credentials.accessToken,
-      });
-
-      const [owner, repo] = values.sourceConfig.repository.split('/');
-      const path = values.sourceConfig.path || '';
-      const branch = values.sourceConfig.branch || 'main';
-
-      const response = await octokit.repos.getContent({
-        owner,
-        repo,
-        path,
-        ref: branch,
-      });
-
-      const contents = Array.isArray(response.data) ? response.data : [response.data];
-      const markdownFiles = contents.filter(item => item.type === 'file' && item.name.endsWith('.md'));
-      
-      notifications.show({
-        title: 'Found files',
-        message: `Found ${markdownFiles.length} markdown files. Starting import...`,
-        color: 'blue',
-      });
-
-      // Get list of existing pages to delete
-      const recentChanges = await getRecentChanges(values.targetConfig.spaceId);
-      const existingPages = recentChanges?.items || [];
-
-      // Delete existing pages first
-      for (const page of existingPages) {
-        try {
-          await deletePage(page.id);
-          notifications.show({
-            title: 'Cleanup',
-            message: `Deleted existing page: ${page.title}`,
-            color: 'yellow',
-          });
-        } catch (error) {
-          notifications.show({
-            title: 'Warning',
-            message: `Failed to delete page ${page.title}: ${error.message}`,
-            color: 'orange',
-          });
-        }
-      }
-
-      let lastImportedPage = null;
-
-      // Import new files
-      for (const file of markdownFiles) {
-        try {
-          const blob = await octokit.git.getBlob({
-            owner,
-            repo,
-            file_sha: file.sha,
-          });
-
-          const content = atob(blob.data.content);
-          const fileObj = new File([new TextEncoder().encode(content)], file.name, {
-            type: 'text/markdown',
-          });
-
-          // Add random emoji to the page name
-          const emoji = getRandomEmoji();
-          const fileName = file.name.replace('.md', '');
-          const pageTitle = `${emoji} ${fileName}`;
-          
-          const importedPage = await importPage(fileObj, values.targetConfig.spaceId, pageTitle);
-          lastImportedPage = importedPage;
-          
-          notifications.show({
-            title: 'Success',
-            message: `Imported ${pageTitle}`,
-            color: 'green',
-          });
-        } catch (error) {
-          notifications.show({
-            title: 'Error',
-            message: `Failed to import ${file.name}: ${error.message}`,
-            color: 'red',
-          });
-        }
-      }
-
-      notifications.show({
-        title: 'Complete',
-        message: `Import process completed`,
-        color: 'green',
-      });
-
-      // Navigate to the last imported page
-      if (lastImportedPage) {
-        const space = spaces.find(s => s.id === values.targetConfig.spaceId);
-        if (space) {
-          const pageUrl = buildPageUrl(space.slug, lastImportedPage.slugId, lastImportedPage.title);
-          navigate(pageUrl);
-        }
-      }
-
-    } catch (error) {
-      notifications.show({
-        title: 'Error',
-        message: error.message || 'Failed to connect to GitHub',
-        color: 'red',
-      });
-    }
+    await runSync(form.values, spaces, navigate);
   };
 
   return (
