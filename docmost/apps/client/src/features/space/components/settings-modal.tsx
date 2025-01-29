@@ -38,7 +38,7 @@ export default function SpaceSettingsModal({
         padding="xl"
         yOffset="10vh"
         xOffset={0}
-        mah={1000}
+        mah={700}
       >
         <Modal.Overlay/>
         <Modal.Content style={{overflow: "hidden"}}>
@@ -49,7 +49,7 @@ export default function SpaceSettingsModal({
             <Modal.CloseButton/>
           </Modal.Header>
           <Modal.Body>
-            <div style={{height: rem(800)}}>
+            <div style={{height: rem(700)}}>
               <Tabs defaultValue="members">
                 <Tabs.List>
                   <Tabs.Tab fw={500} value="general">

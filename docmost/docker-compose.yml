@@ -11,6 +11,7 @@ services:
   #     APP_SECRET: "efccabc0d32ba9433b5d4819a0fca28c938417a0dc88ba94a1835e1e47362d57"
   #     DATABASE_URL: "postgresql://docmost:digilab@db:5432/docmost?schema=public"
   #     REDIS_URL: "redis://redis:6379"
+  #     VITE_GITHUB_TOKEN: "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"
   #   ports:
   #     - "3001:3000"
   #   restart: unless-stopped

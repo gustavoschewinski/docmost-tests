@@ -21,6 +21,8 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
   const [spaces, setSpaces] = useState<ISpace[]>([]);
   const [loading, setLoading] = useState(false);
   
+  console.log(import.meta.env.VITE_GITHUB_ACCESS_TOKEN);
+
   const form = useForm({
     initialValues: initialValues || {
       name: 'GitHub Docs Sync',
@@ -36,7 +38,7 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
         updateExisting: true
       },
       credentials: {
-        accessToken: ''
+        accessToken: import.meta.env.VITE_GITHUB_ACCESS_TOKEN
       }
     },
   });
@@ -203,7 +205,9 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
 
         <TextInput
           label="GitHub Access Token"
-          placeholder="ghp_..."
+          placeholder="ghp_..." 
+          type="password"
+          description={form.values.credentials?.accessToken ? "Token is set" : "Enter your GitHub access token"}         
           {...form.getInputProps('credentials.accessToken')}
         />
 
@@ -229,17 +233,17 @@ export const SyncConfigForm: React.FC<SyncConfigFormProps> = ({
         />
 
         <Button 
-          variant="outline" 
+          variant="outline"
           onClick={testConnection} 
           mb="sm"
           disabled={!form.values.sourceConfig?.repository || !form.values.credentials?.accessToken}
         >
-          Test Connection
+          Deploy Connection
         </Button>
 
-        <Button type="submit">
+        {/* <Button type="submit">
           {isEdit ? 'Update' : 'Create'} Sync Configuration
-        </Button>
+        </Button> */}
       </Stack>
     </form>
   );
